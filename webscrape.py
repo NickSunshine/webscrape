@@ -1,25 +1,30 @@
+
 import os
 import requests
+from datetime import datetime
+import pandas as pd
 
-def main():
-    print("SAM.gov Webscrape")
-    print("=================")
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+def setup_directories(script_dir):
     input_folder = os.path.join(script_dir, "input")
     output_folder = os.path.join(script_dir, "output")
     os.makedirs(input_folder, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
+    return input_folder, output_folder
 
-    # Read URL from sam_url.txt
+def read_url_from_file(script_dir):
     url_file = os.path.join(script_dir, "sam_url.txt")
     try:
         with open(url_file, "r") as uf:
             url = uf.readline().strip()
+        return url
     except Exception as e:
         print(f"Failed to read URL from {url_file}: {e}")
-        return
+        return None
 
-    csv_filename = os.path.join(input_folder, "ContractOpportunitiesFullCSV.csv")
+def download_csv_file(url, csv_filename):
+    if os.path.exists(csv_filename):
+        print(f"File for today already exists: {csv_filename}. Skipping download.")
+        return
     try:
         print(f"Downloading CSV from {url} ...")
         with requests.get(url, stream=True, timeout=60) as response:
@@ -44,6 +49,31 @@ def main():
         print(f"File downloaded and saved to: {csv_filename}")
     except Exception as e:
         print(f"Failed to download file: {e}")
+
+
+def process_csv_file(csv_filename):
+    # Just open and read the CSV file, like line 7 in finalscrappersam.py
+        try:
+            raw_data = pd.read_csv(
+                csv_filename,
+                encoding='ISO-8859-1'
+            )
+            print(f"CSV file '{csv_filename}' loaded successfully. Rows: {len(raw_data)}")
+        except Exception as e:
+            print(f"Failed to read CSV file: {e}")
+
+def main():
+    print("SAM.gov Webscrape")
+    print("=================")
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    input_folder, output_folder = setup_directories(script_dir)
+    url = read_url_from_file(script_dir)
+    if not url:
+        return
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    csv_filename = os.path.join(input_folder, f"{today_str}_ContractOpportunitiesFullCSV.csv")
+    download_csv_file(url, csv_filename)
+    process_csv_file(csv_filename)
 
 if __name__ == "__main__":
     main()
