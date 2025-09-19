@@ -10,8 +10,15 @@ def main():
     os.makedirs(input_folder, exist_ok=True)
     os.makedirs(output_folder, exist_ok=True)
 
-    # Download CSV file
-    url = "http://sam.gov/api/prod/fileextractservices/v1/api/download/Contract%20Opportunities/datagov/ContractOpportunitiesFullCSV.csv?privacy=Public"
+    # Read URL from sam_url.txt
+    url_file = os.path.join(script_dir, "sam_url.txt")
+    try:
+        with open(url_file, "r") as uf:
+            url = uf.readline().strip()
+    except Exception as e:
+        print(f"Failed to read URL from {url_file}: {e}")
+        return
+
     csv_filename = os.path.join(input_folder, "ContractOpportunitiesFullCSV.csv")
     try:
         print(f"Downloading CSV from {url} ...")
