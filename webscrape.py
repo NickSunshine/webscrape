@@ -1,4 +1,3 @@
-
 import os
 import requests
 from datetime import datetime
@@ -52,17 +51,49 @@ def download_csv_file(url, csv_filename):
 
 
 def process_csv_file(csv_filename):
-    # Just open and read the CSV file, like line 7 in finalscrappersam.py
-        try:
-            raw_data = pd.read_csv(
-                csv_filename,
-                encoding='ISO-8859-1'
-            )
-            print(f"CSV file '{csv_filename}' loaded successfully. Rows: {len(raw_data)}")
-        except Exception as e:
-            print(f"Failed to read CSV file: {e}")
+    try:
+        print("Reading CSV file...")
+        raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
+        print(f"CSV file '{csv_filename}' loaded successfully. Rows: {len(raw_data)}")
+
+        # Save to Excel file with date-stamped filename in output directory
+        print("Processing and cleaning data for Excel export...")
+        today = datetime.now()
+        output_dir = os.path.join(os.path.dirname(csv_filename), '..', 'output')
+        output_dir = os.path.abspath(output_dir)
+        os.makedirs(output_dir, exist_ok=True)
+        output_filename = os.path.join(output_dir, f"{today.strftime('%Y-%m-%d')}_SamOpportunities.xlsx")
+        
+        # Sanitize column names and index for Excel
+        print("Sanitizing column names...")
+        illegal_chars = [':', '\\', '/', '?', '*', '[', ']']
+        def sanitize(val):
+            val = str(val)
+            for ch in illegal_chars:
+                val = val.replace(ch, '_')
+            return val[:31]
+        raw_data.columns = [sanitize(col) for col in raw_data.columns]
+        
+        # Remove non-printable/control characters from all string columns
+        print("Cleaning string data...")
+        import re
+        def clean_string(s):
+            if isinstance(s, str):
+                # Remove all non-printable/control characters
+                return re.sub(r'[\x00-\x1F\x7F-\x9F]', '', s)
+            return s
+        for col in raw_data.select_dtypes(include=['object']).columns:
+            raw_data[col] = raw_data[col].apply(clean_string)
+
+        # Save to Excel with a fixed sheet name and explicit engine
+        print("Saving Excel file...")
+        raw_data.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
+        print(f"Processed file saved as: {output_filename}")
+    except Exception as e:
+        print(f"Failed to read CSV file: {e}")
 
 def main():
+    print()
     print("SAM.gov Webscrape")
     print("=================")
     script_dir = os.path.dirname(os.path.abspath(__file__))
