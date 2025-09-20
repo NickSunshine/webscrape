@@ -22,7 +22,7 @@ def read_url_from_file(script_dir):
 
 def download_csv_file(url, csv_filename):
     if os.path.exists(csv_filename):
-        print(f"File for today already exists: {csv_filename}. Skipping download.")
+        print(f"Contract opportunities file for today already exists: {csv_filename}. Skipping download.")
         return
     try:
         print(f"Downloading CSV from {url} ...")
@@ -54,7 +54,7 @@ def process_csv_file(csv_filename):
     try:
         print("Reading CSV file...")
         raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
-        print(f"CSV file '{csv_filename}' loaded successfully. Rows: {len(raw_data)}")
+        print(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
 
         # Save to Excel file with date-stamped filename in output directory
         print("Processing and cleaning data for Excel export...")
@@ -86,7 +86,7 @@ def process_csv_file(csv_filename):
             raw_data[col] = raw_data[col].apply(clean_string)
 
         # Save to Excel with a fixed sheet name and explicit engine
-        print("Saving Excel file...")
+        print("Saving Excel file (this may take a minute or two)...")
         raw_data.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
         print(f"Processed file saved as: {output_filename}")
     except Exception as e:
