@@ -101,8 +101,7 @@ def main():
     url = read_url_from_file(script_dir)
     if not url:
         return
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    csv_filename = os.path.join(input_folder, f"{today_str}_ContractOpportunitiesFullCSV.csv")
+    csv_filename = os.path.join(input_folder, f"ContractOpportunitiesFullCSV.csv")
     download_csv_file(url, csv_filename)
     process_csv_file(csv_filename)
 
