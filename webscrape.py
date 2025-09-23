@@ -2,6 +2,7 @@ import os
 import requests
 from datetime import datetime
 import pandas as pd
+import sys
 
 def setup_directories(script_dir):
     input_folder = os.path.join(script_dir, "input")
@@ -11,7 +12,8 @@ def setup_directories(script_dir):
     return input_folder, output_folder
 
 def read_url_from_file(script_dir):
-    url_file = os.path.join(script_dir, "sam_url.txt")
+    cfg_dir = os.path.join(script_dir, "cfg")
+    url_file = os.path.join(cfg_dir, "sam_url.txt")
     try:
         with open(url_file, "r") as uf:
             url = uf.readline().strip()
@@ -28,23 +30,10 @@ def download_csv_file(url, csv_filename):
         print(f"Downloading CSV from {url} ...")
         with requests.get(url, stream=True, timeout=60) as response:
             response.raise_for_status()
-            total_length = response.headers.get('content-length')
-            if total_length is not None:
-                total_length = int(total_length)
-            downloaded = 0
-            chunk_count = 0
             with open(csv_filename, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-                        downloaded += len(chunk)
-                        chunk_count += 1
-                        if total_length:
-                            percent = (downloaded / total_length) * 100
-                            print(f"Downloaded {downloaded // 1024} KB ({percent:.2f}%)", end='\r')
-                        else:
-                            print(f"Downloaded chunk {chunk_count}", end='\r')
-            print()  # Newline after progress
         print(f"File downloaded and saved to: {csv_filename}")
     except Exception as e:
         print(f"Failed to download file: {e}")
@@ -86,17 +75,22 @@ def process_csv_file(csv_filename):
             raw_data[col] = raw_data[col].apply(clean_string)
 
         # Save to Excel with a fixed sheet name and explicit engine
-        print("Saving Excel file (this may take a minute or two)...")
+        print("Saving Excel file...")
         raw_data.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
         print(f"Processed file saved as: {output_filename}")
     except Exception as e:
         print(f"Failed to read CSV file: {e}")
 
 def main():
-    print()
+    # Set up logging to a timestamped file in 'logs' directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    logs_dir = os.path.join(script_dir, "logs")
+    os.makedirs(logs_dir, exist_ok=True)
+    log_filename = os.path.join(logs_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_webscrape.log")
+    sys.stdout = open(log_filename, "w", encoding="utf-8")
+
     print("SAM.gov Webscrape")
     print("=================")
-    script_dir = os.path.dirname(os.path.abspath(__file__))
     input_folder, output_folder = setup_directories(script_dir)
     url = read_url_from_file(script_dir)
     if not url:
