@@ -12,7 +12,12 @@ def setup_directories(script_dir):
     return input_folder, output_folder
 
 def read_url_from_file(script_dir):
-    cfg_dir = os.path.join(script_dir, "cfg")
+    if getattr(sys, 'frozen', False):
+        # Running as a PyInstaller bundle
+        base_path = sys._MEIPASS
+    else:
+        base_path = script_dir
+    cfg_dir = os.path.join(base_path, "cfg")
     url_file = os.path.join(cfg_dir, "sam_url.txt")
     try:
         with open(url_file, "r") as uf:
