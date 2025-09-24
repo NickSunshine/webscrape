@@ -3,6 +3,7 @@ import requests
 from datetime import datetime
 import pandas as pd
 import sys
+import logging  # <-- Added
 
 def setup_directories(script_dir):
     input_folder = os.path.join(script_dir, "input")
@@ -12,46 +13,40 @@ def setup_directories(script_dir):
     return input_folder, output_folder
 
 def read_url_from_file(script_dir):
-    if getattr(sys, 'frozen', False):
-        # Running as a PyInstaller bundle
-        base_path = sys._MEIPASS
-    else:
-        base_path = script_dir
-    cfg_dir = os.path.join(base_path, "cfg")
+    cfg_dir = os.path.join(script_dir, "cfg")
     url_file = os.path.join(cfg_dir, "sam_url.txt")
     try:
         with open(url_file, "r") as uf:
             url = uf.readline().strip()
         return url
     except Exception as e:
-        print(f"Failed to read URL from {url_file}: {e}")
+        logging.info(f"Failed to read URL from {url_file}: {e}")
         return None
 
 def download_csv_file(url, csv_filename):
     if os.path.exists(csv_filename):
-        print(f"Contract opportunities file for today already exists: {csv_filename}. Skipping download.")
+        logging.info(f"Contract opportunities file for today already exists: {csv_filename}. Skipping download.")
         return
     try:
-        print(f"Downloading CSV from {url} ...")
+        logging.info(f"Downloading CSV from {url} ...")
         with requests.get(url, stream=True, timeout=60) as response:
             response.raise_for_status()
             with open(csv_filename, "wb") as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-        print(f"File downloaded and saved to: {csv_filename}")
+        logging.info(f"File downloaded and saved to: {csv_filename}")
     except Exception as e:
-        print(f"Failed to download file: {e}")
-
+        logging.info(f"Failed to download file: {e}")
 
 def process_csv_file(csv_filename):
     try:
-        print("Reading CSV file...")
+        logging.info("Reading CSV file...")
         raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
-        print(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
+        logging.info(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
 
         # Save to Excel file with date-stamped filename in output directory
-        print("Processing and cleaning data for Excel export...")
+        logging.info("Processing and cleaning data for Excel export...")
         today = datetime.now()
         output_dir = os.path.join(os.path.dirname(csv_filename), '..', 'output')
         output_dir = os.path.abspath(output_dir)
@@ -59,7 +54,7 @@ def process_csv_file(csv_filename):
         output_filename = os.path.join(output_dir, f"{today.strftime('%Y-%m-%d')}_SamOpportunities.xlsx")
         
         # Sanitize column names and index for Excel
-        print("Sanitizing column names...")
+        logging.info("Sanitizing column names...")
         illegal_chars = [':', '\\', '/', '?', '*', '[', ']']
         def sanitize(val):
             val = str(val)
@@ -69,7 +64,7 @@ def process_csv_file(csv_filename):
         raw_data.columns = [sanitize(col) for col in raw_data.columns]
         
         # Remove non-printable/control characters from all string columns
-        print("Cleaning string data...")
+        logging.info("Cleaning string data...")
         import re
         def clean_string(s):
             if isinstance(s, str):
@@ -80,22 +75,33 @@ def process_csv_file(csv_filename):
             raw_data[col] = raw_data[col].apply(clean_string)
 
         # Save to Excel with a fixed sheet name and explicit engine
-        print("Saving Excel file...")
+        logging.info("Saving Excel file...")
         raw_data.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
-        print(f"Processed file saved as: {output_filename}")
+        logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
-        print(f"Failed to read CSV file: {e}")
+        logging.info(f"Failed to read CSV file: {e}")
 
 def main():
-    # Set up logging to a timestamped file in 'logs' directory
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    # Set up logging to both file and console
+    if getattr(sys, 'frozen', False):
+        script_dir = os.path.dirname(sys.executable)
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
     logs_dir = os.path.join(script_dir, "logs")
     os.makedirs(logs_dir, exist_ok=True)
     log_filename = os.path.join(logs_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_webscrape.log")
-    sys.stdout = open(log_filename, "w", encoding="utf-8")
 
-    print("SAM.gov Webscrape")
-    print("=================")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        handlers=[
+            logging.FileHandler(log_filename, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
+    logging.info("SAM.gov Webscrape")
+    logging.info("=================")
     input_folder, output_folder = setup_directories(script_dir)
     url = read_url_from_file(script_dir)
     if not url:
