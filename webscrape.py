@@ -3,7 +3,8 @@ import requests
 from datetime import datetime
 import pandas as pd
 import sys
-import logging  # <-- Added
+import logging
+import re
 
 def setup_directories(script_dir):
     input_folder = os.path.join(script_dir, "input")
@@ -45,6 +46,29 @@ def process_csv_file(csv_filename):
         raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
         logging.info(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
 
+        # Load keywords from cfg/keywords.txt
+        keywords_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keywords.txt")
+        try:
+            with open(keywords_file, "r", encoding="utf-8") as kf:
+                keywords = [line.strip() for line in kf if line.strip()]
+            logging.info(f"Loaded {len(keywords)} keywords for filtering.")
+        except Exception as e:
+            logging.info(f"Failed to read keywords from {keywords_file}: {e}")
+            keywords = []
+
+        if keywords:
+            # Filter rows where Description contains any keyword (case-insensitive)
+            pattern = '|'.join([re.escape(k) for k in keywords])
+            mask = raw_data['Description'].str.contains(pattern, case=False, na=False)
+            filtered_data = raw_data[mask].copy()  # <-- Add .copy() here
+            logging.info(f"Filtered data: {len(filtered_data)} rows match keywords.")
+        else:
+            filtered_data = raw_data
+            logging.info("No keywords loaded; skipping filtering.")
+
+        # Use filtered_data for all further processing
+        data_to_save = filtered_data
+
         # Save to Excel file with date-stamped filename in output directory
         logging.info("Processing and cleaning data for Excel export...")
         today = datetime.now()
@@ -61,22 +85,21 @@ def process_csv_file(csv_filename):
             for ch in illegal_chars:
                 val = val.replace(ch, '_')
             return val[:31]
-        raw_data.columns = [sanitize(col) for col in raw_data.columns]
+        data_to_save.columns = [sanitize(col) for col in data_to_save.columns]
         
         # Remove non-printable/control characters from all string columns
         logging.info("Cleaning string data...")
-        import re
         def clean_string(s):
             if isinstance(s, str):
                 # Remove all non-printable/control characters
                 return re.sub(r'[\x00-\x1F\x7F-\x9F]', '', s)
             return s
-        for col in raw_data.select_dtypes(include=['object']).columns:
-            raw_data[col] = raw_data[col].apply(clean_string)
+        for col in data_to_save.select_dtypes(include=['object']).columns:
+            data_to_save[col] = data_to_save[col].apply(clean_string)
 
         # Save to Excel with a fixed sheet name and explicit engine
         logging.info("Saving Excel file...")
-        raw_data.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
+        data_to_save.to_excel(output_filename, index=False, sheet_name='Sheet1', engine='openpyxl')
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
         logging.info(f"Failed to read CSV file: {e}")
