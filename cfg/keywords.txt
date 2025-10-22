@@ -1,38 +1,41 @@
 accessible transportation
-acc
+ACC
 accident
 active parking
 active safety
-adas
+ADAS
 adolescent drivers
 advanced driver assistance system
-aeb
+AEB
 aggressive driving
 alcohol
 automated driving interface
 automated driving systems
+automated vehicles
 automated vehicle systems improvement
 automobile safety measures
-av
+autonomous vehicles
+AV
 augmented reality
-bicyclist/cyclist
+bicyclist
 biomechanics
 bipartisan infrastructure law
 blind spot monitoring
 camera
 camera-based driver awareness systems
 cannabis
-cav
+CAV
 collision avoidance
 collision warning
 compliance
 connected and automated vehicles
 connected vehicles
 crash
-cv
+CV
 cyber resiliency
 cyber security
 cybersecurity
+cyclist
 disability
 distraction
 drowsy
@@ -42,49 +45,52 @@ driver assessment
 driver engagement
 driver monitoring
 driver vehicle interface
-dvi
+DVI
 e-scooter
 electric vehicles
-eu
+EU
 european union
 external communication
 fatigue
-fcw
+FCW
 field operational test
-fmvss
+FMVSS
 fog
 forward collision warning
-fot
+FOT
 functional safety
 germany
 helmet
 highway automation
-hmi
+HMI
 impairment
 incident safety assist
 injury
 international organization for standardization
-iso
+ISO
 japan
 lane centering
 lane departure warning
 lane keep assist
 lane support systems
-lc
-ldw
+LC
+LDW
 lidar
-lka
-l2/3/4/5
+LKA
+L2
+L3
+L4
+L5
 low speed automated vehicles
-lsav
+LSAV
 marijuana
 mobility
 motorcycle
 naturalistic driving study
-ncap
-nds
+NCAP
+NDS
 new car assessment program
-nhtsa
+NHTSA
 novice driver safety
 older drivers
 pedestrians
@@ -95,7 +101,7 @@ public health
 radar
 rain
 rear cross traffic alert
-rcta
+RCTA
 risk driving
 robotaxi
 road user
@@ -108,7 +114,7 @@ semi-automated driving
 sensors
 situational awareness
 snow
-sotif
+SOTIF
 sound requirements
 speed assist
 speeding
@@ -122,14 +128,14 @@ traffic jam assist
 training
 transportation safety
 united nations economic commission for europe
-unece
-v2i
-v2v
-v2x
+UNECE
+V2I
+V2V
+V2X
 vehicle detection
 vehicle physical system
 virtual reality
-vru
+VRU
 vulnerable road users
 weather
 workload
