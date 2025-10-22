@@ -1,0 +1,11 @@
+NoticeId
+Title
+Sol#
+Department/Ind.Agency
+Sub-Tier
+Office
+PostedDate
+Type
+BaseType
+Link
+Description

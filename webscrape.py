@@ -51,23 +51,36 @@ def process_csv_file(csv_filename):
         try:
             with open(keywords_file, "r", encoding="utf-8") as kf:
                 keywords = [line.strip() for line in kf if line.strip()]
-            logging.info(f"Loaded {len(keywords)} keywords for filtering.")
+            logging.info(f"Loaded {len(keywords)} keywords for filtering from keywords.txt.")
         except Exception as e:
             logging.info(f"Failed to read keywords from {keywords_file}: {e}")
             keywords = []
 
         if keywords:
-            # Filter rows where Description contains any keyword (case-insensitive)
-            pattern = '|'.join([re.escape(k) for k in keywords])
-            mask = raw_data['Description'].str.contains(pattern, case=False, na=False)
-            filtered_data = raw_data[mask].copy()  # <-- Add .copy() here
-            logging.info(f"Filtered data: {len(filtered_data)} rows match keywords.")
+            # Build regex pattern for whole word/phrase, case-insensitive
+            # \b for word boundaries, re.escape for special chars
+            pattern = '|'.join([r'\b' + re.escape(k) + r'\b' for k in keywords])
+            mask = raw_data['Description'].str.contains(pattern, case=False, na=False, regex=True)
+            filtered_data = raw_data[mask].copy()
+            logging.info(f"{len(filtered_data)} rows match keywords.")
         else:
             filtered_data = raw_data
             logging.info("No keywords loaded; skipping filtering.")
 
         # Use filtered_data for all further processing
         data_to_save = filtered_data
+
+        # Filter columns based on cfg/keep_cols.txt
+        keep_cols_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keep_cols.txt")
+        try:
+            with open(keep_cols_file, "r", encoding="utf-8") as kcf:
+                keep_cols = [line.strip() for line in kcf if line.strip()]
+            # Only keep columns that exist in the DataFrame
+            cols_to_keep = [col for col in keep_cols if col in data_to_save.columns]
+            data_to_save = data_to_save[cols_to_keep]
+            logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt.")
+        except Exception as e:
+            logging.info(f"Failed to read or apply keep_cols.txt: {e}")
 
         # Save to Excel file with date-stamped filename in output directory
         logging.info("Processing and cleaning data for Excel export...")
@@ -95,7 +108,7 @@ def process_csv_file(csv_filename):
                 return re.sub(r'[\x00-\x1F\x7F-\x9F]', '', s)
             return s
         for col in data_to_save.select_dtypes(include=['object']).columns:
-            data_to_save[col] = data_to_save[col].apply(clean_string)
+            data_to_save.loc[:, col] = data_to_save[col].apply(clean_string)
 
         # Save to Excel with a fixed sheet name and explicit engine
         logging.info("Saving Excel file...")
