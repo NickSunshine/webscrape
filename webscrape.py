@@ -25,9 +25,6 @@ def read_url_from_file(script_dir):
         return None
 
 def download_csv_file(url, csv_filename):
-    if os.path.exists(csv_filename):
-        logging.info(f"Contract opportunities file for today already exists: {csv_filename}. Skipping download.")
-        return
     try:
         logging.info(f"Downloading CSV from {url} ...")
         with requests.get(url, stream=True, timeout=60) as response:
@@ -40,13 +37,12 @@ def download_csv_file(url, csv_filename):
     except Exception as e:
         logging.info(f"Failed to download file: {e}")
 
-def process_csv_file(csv_filename):
+def process_csv_file(csv_filename, timestamp):
     try:
         logging.info("\nReading CSV file...")
         raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
         logging.info(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
 
-        # Load keywords from cfg/keywords.txt
         keywords_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keywords.txt")
         try:
             with open(keywords_file, "r", encoding="utf-8") as kf:
@@ -95,28 +91,24 @@ def process_csv_file(csv_filename):
             filtered_data = raw_data
             logging.info("No keywords loaded; skipping filtering.")
 
-        # Use filtered_data for all further processing
-        data_to_save = filtered_data
-
-        # Filter columns based on cfg/keep_cols.txt
+        # Filter columns based on keep_cols.txt
         keep_cols_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keep_cols.txt")
         try:
             with open(keep_cols_file, "r", encoding="utf-8") as kcf:
                 keep_cols = [line.strip() for line in kcf if line.strip()]
             # Only keep columns that exist in the DataFrame
-            cols_to_keep = [col for col in keep_cols if col in data_to_save.columns]
-            data_to_save = data_to_save[cols_to_keep]
+            cols_to_keep = [col for col in keep_cols if col in filtered_data.columns]
+            filtered_data = filtered_data[cols_to_keep]
             logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt.")
         except Exception as e:
             logging.info(f"Failed to read or apply keep_cols.txt: {e}")
 
         # Save to Excel file with date-stamped filename in output directory
         logging.info("\nProcessing and cleaning data for Excel export...")
-        today = datetime.now()
         output_dir = os.path.join(os.path.dirname(csv_filename), '..', 'output')
         output_dir = os.path.abspath(output_dir)
         os.makedirs(output_dir, exist_ok=True)
-        output_filename = os.path.join(output_dir, f"{today.strftime('%Y-%m-%d')}_SamOpportunities.xlsx")
+        output_filename = os.path.join(output_dir, f"{timestamp}_SAMOpportunities.xlsx")
         
         # Sanitize column names and index for Excel
         logging.info("Sanitizing column names...")
@@ -126,7 +118,7 @@ def process_csv_file(csv_filename):
             for ch in illegal_chars:
                 val = val.replace(ch, '_')
             return val[:31]
-        data_to_save.columns = [sanitize(col) for col in data_to_save.columns]
+        filtered_data.columns = [sanitize(col) for col in filtered_data.columns]
         
         # Remove non-printable/control characters from all string columns
         logging.info("Cleaning string data...")
@@ -135,8 +127,8 @@ def process_csv_file(csv_filename):
                 # Remove all non-printable/control characters
                 return re.sub(r'[\x00-\x1F\x7F-\x9F]', '', s)
             return s
-        for col in data_to_save.select_dtypes(include=['object']).columns:
-            data_to_save.loc[:, col] = data_to_save[col].apply(clean_string)
+        for col in filtered_data.select_dtypes(include=['object']).columns:
+            filtered_data.loc[:, col] = filtered_data[col].apply(clean_string)
 
         # Save to Excel with a renamed sheet and add keyword match counts sheet
         logging.info("Saving Excel file...")
@@ -149,13 +141,12 @@ def process_csv_file(csv_filename):
                 count = raw_data['Description'].str.count(pattern, flags=flags).sum()
                 keyword_counts.append({'Keyword': k, 'Count': int(count)})
             keyword_counts_df = pd.DataFrame(keyword_counts)
-            # Sort by count descending
             keyword_counts_df = keyword_counts_df.sort_values(by='Count', ascending=False).reset_index(drop=True)
         else:
             keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
 
         with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
-            data_to_save.to_excel(writer, index=False, sheet_name='Keyword Matches')
+            filtered_data.to_excel(writer, index=False, sheet_name='Keyword Matches')
             keyword_counts_df.to_excel(writer, index=False, sheet_name='Keyword Match Counts')
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
@@ -169,7 +160,8 @@ def main():
         script_dir = os.path.dirname(os.path.abspath(__file__))
     logs_dir = os.path.join(script_dir, "logs")
     os.makedirs(logs_dir, exist_ok=True)
-    log_filename = os.path.join(logs_dir, f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_webscrape.log")
+    timestamp = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    log_filename = os.path.join(logs_dir, f"{timestamp}_webscrape.log")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -188,7 +180,7 @@ def main():
         return
     csv_filename = os.path.join(input_folder, f"ContractOpportunitiesFullCSV.csv")
     download_csv_file(url, csv_filename)
-    process_csv_file(csv_filename)
+    process_csv_file(csv_filename, timestamp)
 
 if __name__ == "__main__":
     main()

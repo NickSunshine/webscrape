@@ -14,4 +14,5 @@ if errorlevel 1 (
 
 python -m PyInstaller --onefile webscrape.py
 xcopy cfg dist\cfg /E /I /Y
-echo Build complete. cfg folder copied to dist.
+copy readme.txt dist\readme.txt /Y
+echo Build complete. cfg folder and readme.txt copied to dist.
