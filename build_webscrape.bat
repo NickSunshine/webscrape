@@ -15,4 +15,7 @@ if errorlevel 1 (
 python -m PyInstaller --onefile webscrape.py
 xcopy cfg dist\cfg /E /I /Y
 copy readme.txt dist\readme.txt /Y
-echo Build complete. cfg folder and readme.txt copied to dist.
+
+powershell -Command "Compress-Archive -Path dist\* -DestinationPath webscrape_1-0.zip -Force"
+
+echo Build complete. cfg folder and readme.txt copied to dist. All dist contents zipped to webscrape.zip.
