@@ -5,6 +5,7 @@ import pandas as pd
 import sys
 import logging
 import re
+from openpyxl.styles import Alignment
 
 def setup_directories(script_dir):
     input_folder = os.path.join(script_dir, "input")
@@ -69,8 +70,10 @@ def process_csv_file(csv_filename, timestamp):
             return pattern, flags
 
         if keywords:
-            # Build a mask for each keyword, then combine
+            # Prepare a list to collect matched keywords for each row
+            matched_keywords_per_row = [[] for _ in range(len(raw_data))]
             masks = []
+            keyword_counts = []
             for k in keywords:
                 pattern, flags = make_pattern_and_flags(k)
                 logging.info(f"Searching for keyword: '{k}' ...")
@@ -78,28 +81,51 @@ def process_csv_file(csv_filename, timestamp):
                 match_count = mask.sum()
                 logging.info(f"Found {match_count} row(s) matching keyword: '{k}'")
                 masks.append(mask)
+                keyword_counts.append({'Keyword': k, 'Count': int(match_count)})
+                # For each row, if this keyword matches, add it to the matched keywords list
+                for idx, is_match in enumerate(mask):
+                    if is_match:
+                        matched_keywords_per_row[idx].append(k)
             if masks:
                 combined_mask = masks[0]
                 for m in masks[1:]:
                     combined_mask = combined_mask | m
                 filtered_data = raw_data[combined_mask].copy()
                 logging.info(f"\n{len(filtered_data)} rows match keywords.")
+                # Add the Matched Keywords column as the first column
+                matched_keywords_filtered = [
+                    ", ".join(matched_keywords_per_row[idx])
+                    for idx in filtered_data.index
+                ]
+                filtered_data.insert(0, "Matched Keywords", matched_keywords_filtered)
             else:
                 filtered_data = raw_data
                 logging.info("No keywords loaded; skipping filtering.")
+                filtered_data.insert(0, "Matched Keywords", [""] * len(filtered_data))
+            # Create DataFrame for keyword counts, sorted
+            keyword_counts_df = pd.DataFrame(keyword_counts)
+            keyword_counts_df = keyword_counts_df.sort_values(by='Count', ascending=False).reset_index(drop=True)
         else:
             filtered_data = raw_data
             logging.info("No keywords loaded; skipping filtering.")
+            filtered_data.insert(0, "Matched Keywords", [""] * len(filtered_data))
+            keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
 
-        # Filter columns based on keep_cols.txt
+        # Filter columns based on keep_cols.txt, but always include "Matched Keywords" as the first column
         keep_cols_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keep_cols.txt")
         try:
             with open(keep_cols_file, "r", encoding="utf-8") as kcf:
                 keep_cols = [line.strip() for line in kcf if line.strip()]
             # Only keep columns that exist in the DataFrame
             cols_to_keep = [col for col in keep_cols if col in filtered_data.columns]
+            # Ensure "Matched Keywords" is the first column
+            if "Matched Keywords" not in cols_to_keep:
+                cols_to_keep = ["Matched Keywords"] + cols_to_keep
+            else:
+                # Move "Matched Keywords" to the front if it's already present
+                cols_to_keep = ["Matched Keywords"] + [col for col in cols_to_keep if col != "Matched Keywords"]
             filtered_data = filtered_data[cols_to_keep]
-            logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt.")
+            logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt (plus Matched Keywords).")
         except Exception as e:
             logging.info(f"Failed to read or apply keep_cols.txt: {e}")
 
@@ -133,21 +159,32 @@ def process_csv_file(csv_filename, timestamp):
         # Save to Excel with a renamed sheet and add keyword match counts sheet
         logging.info("Saving Excel file...")
 
-        # Prepare keyword match counts
-        keyword_counts = []
-        if keywords:
-            for k in keywords:
-                pattern, flags = make_pattern_and_flags(k)
-                count = raw_data['Description'].str.count(pattern, flags=flags).sum()
-                keyword_counts.append({'Keyword': k, 'Count': int(count)})
-            keyword_counts_df = pd.DataFrame(keyword_counts)
-            keyword_counts_df = keyword_counts_df.sort_values(by='Count', ascending=False).reset_index(drop=True)
-        else:
-            keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
-
         with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
             filtered_data.to_excel(writer, index=False, sheet_name='Keyword Matches')
             keyword_counts_df.to_excel(writer, index=False, sheet_name='Keyword Match Counts')
+
+            # Auto-adjust column widths for all sheets (fit to longest cell in each column, plus 2 chars padding)
+            workbook = writer.book
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                # Left justify all header cells
+                for cell in next(worksheet.iter_rows(min_row=1, max_row=1)):
+                    cell.alignment = Alignment(horizontal='left')
+                for col in worksheet.columns:
+                    # Skip the header (first cell)
+                    max_length = 0
+                    col_letter = col[0].column_letter
+                    for cell in col[1:]:  # skip header
+                        try:
+                            cell_length = len(str(cell.value)) if cell.value is not None else 0
+                            if cell_length > max_length:
+                                max_length = cell_length
+                        except:
+                            pass
+                    # Also consider the header length
+                    header_length = len(str(col[0].value)) if col[0].value is not None else 0
+                    best_length = max(max_length, header_length) + 2  # Add 2 chars padding
+                    worksheet.column_dimensions[col_letter].width = best_length
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
         logging.info(f"Failed to read CSV file: {e}")
