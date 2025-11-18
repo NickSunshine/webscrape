@@ -185,6 +185,19 @@ def process_csv_file(csv_filename, timestamp):
                     header_length = len(str(col[0].value)) if col[0].value is not None else 0
                     best_length = max(max_length, header_length) + 2  # Add 2 chars padding
                     worksheet.column_dimensions[col_letter].width = best_length
+
+            # Make "Link" column cells clickable hyperlinks in both sheets (if present)
+            for sheet_name in writer.sheets:
+                worksheet = writer.sheets[sheet_name]
+                # Find the "Link" column index (1-based for openpyxl)
+                for col_idx, cell in enumerate(next(worksheet.iter_rows(min_row=1, max_row=1)), 1):
+                    if cell.value == "Link":
+                        for row in worksheet.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+                            link_cell = row[0]
+                            if link_cell.value and isinstance(link_cell.value, str) and link_cell.value.startswith("http"):
+                                link_cell.hyperlink = link_cell.value
+                                link_cell.style = "Hyperlink"
+                        break
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
         logging.info(f"Failed to read CSV file: {e}")
