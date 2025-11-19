@@ -97,7 +97,14 @@ def process_csv_file(csv_filename, timestamp):
                     ", ".join(matched_keywords_per_row[idx])
                     for idx in filtered_data.index
                 ]
+                matched_keywords_count = [
+                    len(matched_keywords_per_row[idx])
+                    for idx in filtered_data.index
+                ]
                 filtered_data.insert(0, "Matched Keywords", matched_keywords_filtered)
+                filtered_data.insert(1, "Matched Keywords Count", matched_keywords_count)
+                # Sort by Matched Keywords Count descending
+                filtered_data = filtered_data.sort_values(by="Matched Keywords Count", ascending=False).reset_index(drop=True)
             else:
                 filtered_data = raw_data
                 logging.info("No keywords loaded; skipping filtering.")
@@ -111,21 +118,22 @@ def process_csv_file(csv_filename, timestamp):
             filtered_data.insert(0, "Matched Keywords", [""] * len(filtered_data))
             keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
 
-        # Filter columns based on keep_cols.txt, but always include "Matched Keywords" as the first column
+        # Filter columns based on keep_cols.txt, but always include "Matched Keywords" and "Matched Keywords Count" as the first columns
         keep_cols_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keep_cols.txt")
         try:
             with open(keep_cols_file, "r", encoding="utf-8") as kcf:
                 keep_cols = [line.strip() for line in kcf if line.strip()]
             # Only keep columns that exist in the DataFrame
             cols_to_keep = [col for col in keep_cols if col in filtered_data.columns]
-            # Ensure "Matched Keywords" is the first column
-            if "Matched Keywords" not in cols_to_keep:
-                cols_to_keep = ["Matched Keywords"] + cols_to_keep
-            else:
-                # Move "Matched Keywords" to the front if it's already present
-                cols_to_keep = ["Matched Keywords"] + [col for col in cols_to_keep if col != "Matched Keywords"]
+            # Ensure "Matched Keywords" and "Matched Keywords Count" are the first columns
+            for special_col in ["Matched Keywords", "Matched Keywords Count"]:
+                if special_col not in cols_to_keep:
+                    cols_to_keep = [special_col] + cols_to_keep
+                else:
+                    # Move to the front if already present
+                    cols_to_keep = [special_col] + [col for col in cols_to_keep if col != special_col]
             filtered_data = filtered_data[cols_to_keep]
-            logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt (plus Matched Keywords).")
+            logging.info(f"Keeping {len(cols_to_keep)} columns as specified in keep_cols.txt (plus Matched Keywords columns).")
         except Exception as e:
             logging.info(f"Failed to read or apply keep_cols.txt: {e}")
 
