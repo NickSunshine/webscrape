@@ -1,4 +1,5 @@
 NoticeId
+Title
 Sub-Tier
 PostedDate
 Type

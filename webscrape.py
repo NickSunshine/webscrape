@@ -103,8 +103,11 @@ def process_csv_file(csv_filename, timestamp):
                 ]
                 filtered_data.insert(0, "Matched Keywords", matched_keywords_filtered)
                 filtered_data.insert(1, "Matched Keywords Count", matched_keywords_count)
-                # Sort by Matched Keywords Count descending
-                filtered_data = filtered_data.sort_values(by="Matched Keywords Count", ascending=False).reset_index(drop=True)
+                # Sort by Matched Keywords Count descending, then by Matched Keywords A-Z
+                filtered_data = filtered_data.sort_values(
+                    by=["Matched Keywords Count", "Matched Keywords"],
+                    ascending=[False, True]
+                ).reset_index(drop=True)
             else:
                 filtered_data = raw_data
                 logging.info("No keywords loaded; skipping filtering.")
