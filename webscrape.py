@@ -39,11 +39,55 @@ def download_csv_file(url, csv_filename):
         logging.info(f"Failed to download file: {e}")
 
 def process_csv_file(csv_filename, timestamp):
+    # ...existing code...
     try:
         logging.info("\nReading CSV file...")
         raw_data = pd.read_csv(csv_filename, encoding='ISO-8859-1', dtype=str, low_memory=False)
         logging.info(f"CSV file loaded successfully. Rows: {len(raw_data)}, Columns: {len(raw_data.columns)}")
 
+
+        # --- Organization filtering (keyorgs.txt on 'Sub-Tier') ---
+        keyorgs_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keyorgs.txt")
+        try:
+            with open(keyorgs_file, "r", encoding="utf-8") as kof:
+                keyorgs = [line.strip() for line in kof if line.strip()]
+            logging.info(f"Loaded {len(keyorgs)} organization filters from keyorgs.txt.")
+        except Exception as e:
+            logging.info(f"Failed to read keyorgs from {keyorgs_file}: {e}")
+            keyorgs = []
+
+        def make_pattern_and_flags(k):
+            if " " in k:
+                pattern = r'(?<!\w)' + re.escape(k) + r'(?!\w)'
+                flags = re.IGNORECASE
+            elif k.isalpha() and k.isupper():
+                pattern = r'\b' + re.escape(k) + r'\b'
+                flags = 0
+            else:
+                pattern = r'\b' + re.escape(k) + r'\b'
+                flags = re.IGNORECASE
+            return pattern, flags
+
+        # Filter by organizations first (on 'Sub-Tier')
+        org_filtered_data = raw_data
+        if keyorgs:
+            org_masks = []
+            for org in keyorgs:
+                pattern, flags = make_pattern_and_flags(org)
+                mask = org_filtered_data['Sub-Tier'].str.contains(pattern, case=False, na=False, regex=True, flags=flags)
+                org_masks.append(mask)
+            if org_masks:
+                combined_org_mask = org_masks[0]
+                for m in org_masks[1:]:
+                    combined_org_mask = combined_org_mask | m
+                org_filtered_data = org_filtered_data[combined_org_mask].copy()
+                logging.info(f"{len(org_filtered_data)} rows match organization filters.")
+            else:
+                logging.info("No organization filters loaded; skipping org filtering.")
+        else:
+            logging.info("No organization filters loaded; skipping org filtering.")
+
+        # --- Keyword filtering (keywords.txt on 'Description') ---
         keywords_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keywords.txt")
         try:
             with open(keywords_file, "r", encoding="utf-8") as kf:
@@ -53,73 +97,35 @@ def process_csv_file(csv_filename, timestamp):
             logging.info(f"Failed to read keywords from {keywords_file}: {e}")
             keywords = []
 
-        # Define pattern/flags function for both filtering and counting
-        def make_pattern_and_flags(k):
-            if " " in k:
-                # Phrase: always case-insensitive
-                pattern = r'(?<!\w)' + re.escape(k) + r'(?!\w)'
-                flags = re.IGNORECASE
-            elif k.isalpha() and k.isupper():
-                # All-uppercase single word: case-sensitive
-                pattern = r'\b' + re.escape(k) + r'\b'
-                flags = 0
-            else:
-                # Other single word: case-insensitive
-                pattern = r'\b' + re.escape(k) + r'\b'
-                flags = re.IGNORECASE
-            return pattern, flags
-
         if keywords:
-            # Prepare a list to collect matched keywords for each row
-            matched_keywords_per_row = [[] for _ in range(len(raw_data))]
-            masks = []
-            keyword_counts = []
+            # Use index mapping to avoid list index out of range
+            org_indices = list(org_filtered_data.index)
+            matched_keywords_per_row = {idx: [] for idx in org_indices}
             for k in keywords:
                 pattern, flags = make_pattern_and_flags(k)
                 logging.info(f"Searching for keyword: '{k}' ...")
-                mask = raw_data['Description'].str.contains(pattern, case=False, na=False, regex=True, flags=flags)
-                match_count = mask.sum()
-                logging.info(f"Found {match_count} row(s) matching keyword: '{k}'")
-                masks.append(mask)
-                keyword_counts.append({'Keyword': k, 'Count': int(match_count)})
-                # For each row, if this keyword matches, add it to the matched keywords list
-                for idx, is_match in enumerate(mask):
+                mask = org_filtered_data['Description'].str.contains(pattern, case=False, na=False, regex=True, flags=flags)
+                for idx, is_match in zip(org_indices, mask):
                     if is_match:
                         matched_keywords_per_row[idx].append(k)
-            if masks:
-                combined_mask = masks[0]
-                for m in masks[1:]:
-                    combined_mask = combined_mask | m
-                filtered_data = raw_data[combined_mask].copy()
-                logging.info(f"\n{len(filtered_data)} rows match keywords.")
-                # Add the Matched Keywords column as the first column
-                matched_keywords_filtered = [
-                    ", ".join(matched_keywords_per_row[idx])
-                    for idx in filtered_data.index
-                ]
-                matched_keywords_count = [
-                    len(matched_keywords_per_row[idx])
-                    for idx in filtered_data.index
-                ]
-                filtered_data.insert(0, "Matched Keywords", matched_keywords_filtered)
-                filtered_data.insert(1, "Matched Keywords Count", matched_keywords_count)
-                # Sort by Matched Keywords Count descending, then by Matched Keywords A-Z
-                filtered_data = filtered_data.sort_values(
-                    by=["Matched Keywords Count", "Matched Keywords"],
-                    ascending=[False, True]
-                ).reset_index(drop=True)
-            else:
-                filtered_data = raw_data
-                logging.info("No keywords loaded; skipping filtering.")
-                filtered_data.insert(0, "Matched Keywords", [""] * len(filtered_data))
-            # Create DataFrame for keyword counts, sorted
-            keyword_counts_df = pd.DataFrame(keyword_counts)
-            keyword_counts_df = keyword_counts_df.sort_values(by='Count', ascending=False).reset_index(drop=True)
+            # Only keep rows where at least one keyword matched
+            matched_mask = org_filtered_data.index.map(lambda idx: len(matched_keywords_per_row[idx]) > 0)
+            filtered_data = org_filtered_data[matched_mask].copy()
+            logging.info(f"\n{len(filtered_data)} rows match keywords (at least one keyword).")
+            # Build the columns for only the filtered rows
+            filtered_indices = filtered_data.index.tolist()
+            matched_keywords_filtered = [", ".join(matched_keywords_per_row[i]) for i in filtered_indices]
+            matched_keywords_count = [len(matched_keywords_per_row[i]) for i in filtered_indices]
+            filtered_data.insert(0, "Matched Keywords", matched_keywords_filtered)
+            filtered_data.insert(1, "Matched Keywords Count", matched_keywords_count)
+            filtered_data = filtered_data.sort_values(
+                by=["Matched Keywords Count", "Matched Keywords"],
+                ascending=[False, True]
+            ).reset_index(drop=True)
         else:
-            filtered_data = raw_data
+            filtered_data = org_filtered_data
             logging.info("No keywords loaded; skipping filtering.")
             filtered_data.insert(0, "Matched Keywords", [""] * len(filtered_data))
-            keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
 
         # Filter columns based on keep_cols.txt, but always include "Matched Keywords" and "Matched Keywords Count" as the first columns
         keep_cols_file = os.path.join(os.path.dirname(os.path.dirname(csv_filename)), "cfg", "keep_cols.txt")
@@ -172,43 +178,37 @@ def process_csv_file(csv_filename, timestamp):
 
         with pd.ExcelWriter(output_filename, engine='openpyxl') as writer:
             filtered_data.to_excel(writer, index=False, sheet_name='Keyword Matches')
-            keyword_counts_df.to_excel(writer, index=False, sheet_name='Keyword Match Counts')
 
-            # Auto-adjust column widths for all sheets (fit to longest cell in each column, plus 2 chars padding)
-            workbook = writer.book
-            for sheet_name in writer.sheets:
-                worksheet = writer.sheets[sheet_name]
-                # Left justify all header cells
-                for cell in next(worksheet.iter_rows(min_row=1, max_row=1)):
-                    cell.alignment = Alignment(horizontal='left')
-                for col in worksheet.columns:
-                    # Skip the header (first cell)
-                    max_length = 0
-                    col_letter = col[0].column_letter
-                    for cell in col[1:]:  # skip header
-                        try:
-                            cell_length = len(str(cell.value)) if cell.value is not None else 0
-                            if cell_length > max_length:
-                                max_length = cell_length
-                        except:
-                            pass
-                    # Also consider the header length
-                    header_length = len(str(col[0].value)) if col[0].value is not None else 0
-                    best_length = max(max_length, header_length) + 2  # Add 2 chars padding
-                    worksheet.column_dimensions[col_letter].width = best_length
+            # Auto-adjust column widths for the sheet (fit to longest cell in each column, plus 2 chars padding)
+            worksheet = writer.sheets['Keyword Matches']
+            # Left justify all header cells
+            for cell in next(worksheet.iter_rows(min_row=1, max_row=1)):
+                cell.alignment = Alignment(horizontal='left')
+            for col in worksheet.columns:
+                # Skip the header (first cell)
+                max_length = 0
+                col_letter = col[0].column_letter
+                for cell in col[1:]:  # skip header
+                    try:
+                        cell_length = len(str(cell.value)) if cell.value is not None else 0
+                        if cell_length > max_length:
+                            max_length = cell_length
+                    except:
+                        pass
+                # Also consider the header length
+                header_length = len(str(col[0].value)) if col[0].value is not None else 0
+                best_length = max(max_length, header_length) + 2  # Add 2 chars padding
+                worksheet.column_dimensions[col_letter].width = best_length
 
-            # Make "Link" column cells clickable hyperlinks in both sheets (if present)
-            for sheet_name in writer.sheets:
-                worksheet = writer.sheets[sheet_name]
-                # Find the "Link" column index (1-based for openpyxl)
-                for col_idx, cell in enumerate(next(worksheet.iter_rows(min_row=1, max_row=1)), 1):
-                    if cell.value == "Link":
-                        for row in worksheet.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
-                            link_cell = row[0]
-                            if link_cell.value and isinstance(link_cell.value, str) and link_cell.value.startswith("http"):
-                                link_cell.hyperlink = link_cell.value
-                                link_cell.style = "Hyperlink"
-                        break
+            # Make "Link" column cells clickable hyperlinks (if present)
+            for col_idx, cell in enumerate(next(worksheet.iter_rows(min_row=1, max_row=1)), 1):
+                if cell.value == "Link":
+                    for row in worksheet.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+                        link_cell = row[0]
+                        if link_cell.value and isinstance(link_cell.value, str) and link_cell.value.startswith("http"):
+                            link_cell.hyperlink = link_cell.value
+                            link_cell.style = "Hyperlink"
+                    break
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
         logging.info(f"Failed to read CSV file: {e}")
