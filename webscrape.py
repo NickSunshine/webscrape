@@ -180,7 +180,6 @@ def process_csv_file(csv_filename, timestamp):
             filtered_data.to_excel(writer, index=False, sheet_name='Keyword Matches')
 
             # --- Keyword Match Counts sheet ---
-            # Calculate keyword counts in filtered data
             keyword_counts = []
             if keywords:
                 for k in keywords:
@@ -192,13 +191,11 @@ def process_csv_file(csv_filename, timestamp):
                 keyword_counts_df = keyword_counts_df.sort_values(by='Count', ascending=False).reset_index(drop=True)
             else:
                 keyword_counts_df = pd.DataFrame(columns=['Keyword', 'Count'])
-
             keyword_counts_df.to_excel(writer, index=False, sheet_name='Keyword Match Counts')
 
             # Format both sheets
             for sheet_name in writer.sheets:
                 worksheet = writer.sheets[sheet_name]
-                # Left justify all header cells
                 for cell in next(worksheet.iter_rows(min_row=1, max_row=1)):
                     cell.alignment = Alignment(horizontal='left')
                 for col in worksheet.columns:
@@ -215,7 +212,6 @@ def process_csv_file(csv_filename, timestamp):
                     best_length = max(max_length, header_length) + 2
                     worksheet.column_dimensions[col_letter].width = best_length
 
-                # Make "Link" column cells clickable hyperlinks (if present)
                 for col_idx, cell in enumerate(next(worksheet.iter_rows(min_row=1, max_row=1)), 1):
                     if cell.value == "Link":
                         for row in worksheet.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
@@ -224,6 +220,65 @@ def process_csv_file(csv_filename, timestamp):
                                 link_cell.hyperlink = link_cell.value
                                 link_cell.style = "Hyperlink"
                         break
+
+        # --- Highlight new rows in yellow based on PostedDate compared to previous Excel file timestamp ---
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import PatternFill
+            import re as _re
+            from dateutil.parser import parse as dtparse
+            import tzlocal
+            local_tz = tzlocal.get_localzone()
+            output_files = [f for f in os.listdir(output_dir) if f.endswith('_SAMOpportunities.xlsx')]
+            output_files = sorted(output_files)
+            if len(output_files) >= 2:
+                prev_file = output_files[-2]
+                match = _re.match(r"(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})_SAMOpportunities\.xlsx$", prev_file)
+                if match:
+                    prev_timestamp_str = match.group(1)
+                    prev_timestamp_naive = datetime.strptime(prev_timestamp_str, "%Y-%m-%d_%H-%M-%S")
+                    # Make filename timestamp offset-aware (system local time)
+                    prev_timestamp = prev_timestamp_naive.replace(tzinfo=local_tz)
+                    new_row_indices = []
+                    parse_failures = 0
+                    failed_examples = []
+                    for idx, val in enumerate(filtered_data["PostedDate"].fillna("").astype(str)):
+                        date_str = val.strip()
+                        try:
+                            # Try dateutil first
+                            row_dt = dtparse(date_str, fuzzy=True)
+                        except Exception:
+                            try:
+                                row_dt = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S.%f-%z")
+                            except Exception:
+                                parse_failures += 1
+                                if len(failed_examples) < 5:
+                                    failed_examples.append(date_str)
+                                continue
+                        # Convert row_dt to system local time for comparison
+                        if row_dt.tzinfo is not None:
+                            row_dt_local = row_dt.astimezone(local_tz)
+                        else:
+                            row_dt_local = row_dt.replace(tzinfo=local_tz)
+                        if row_dt_local > prev_timestamp:
+                            new_row_indices.append(idx)
+                    wb = load_workbook(output_filename)
+                    ws = wb['Keyword Matches']
+                    yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+                    for idx in new_row_indices:
+                        excel_row = idx + 2
+                        for cell in ws[excel_row]:
+                            cell.fill = yellow_fill
+                    wb.save(output_filename)
+                    logging.info(f"Highlighted {len(new_row_indices)} new rows in yellow based on PostedDate newer than previous file timestamp: {prev_timestamp_str}")
+                    if parse_failures > 0:
+                        logging.info(f"Could not parse PostedDate for {parse_failures} rows. Examples: {failed_examples}")
+                else:
+                    logging.info(f"Could not extract timestamp from previous Excel filename for highlighting: {prev_file}")
+            else:
+                logging.info("No previous Excel file found for row comparison/highlighting.")
+        except Exception as e:
+            logging.info(f"Failed to highlight new rows: {e}")
         logging.info(f"Processed file saved as: {output_filename}")
     except Exception as e:
         logging.info(f"Failed to read CSV file: {e}")
