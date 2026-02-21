@@ -16,6 +16,6 @@ python -m PyInstaller --onefile webscrape.py
 xcopy cfg dist\cfg /E /I /Y
 copy readme.txt dist\readme.txt /Y
 
-powershell -Command "Compress-Archive -Path dist\* -DestinationPath webscrape_1-1.zip -Force"
+powershell -Command "Compress-Archive -Path dist\* -DestinationPath webscrape_1-2.zip -Force"
 
-echo Build complete. cfg folder and readme.txt copied to dist. All dist contents zipped to webscrape.zip.
+echo Build complete. cfg folder and readme.txt copied to dist. All dist contents zipped to webscrape_1-2.zip.
