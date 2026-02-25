@@ -1,13 +1,31 @@
+
+# Standard library imports
 import os
-import requests
-from datetime import datetime
-import pandas as pd
 import sys
-import logging
 import re
-from openpyxl.styles import Alignment
+import logging
+from datetime import datetime
+
+# Third-party imports
+import requests      # For HTTP requests to download CSV files
+import pandas as pd  # For data manipulation and Excel export
+from openpyxl.styles import Alignment  # For Excel formatting
+# tzlocal is used later for timezone handling (see below)
 
 def setup_directories(script_dir):
+    """
+    Ensure the input and output directories exist within the given script directory.
+
+    Args:
+        script_dir (str): The absolute path to the directory containing the script or executable.
+
+    Returns:
+        tuple: (input_folder, output_folder) - Absolute paths to the input and output directories.
+
+    Notes:
+        - Creates the directories if they do not already exist.
+        - Used to organize input CSVs and output Excel files for the webscrape process.
+    """
     input_folder = os.path.join(script_dir, "input")
     output_folder = os.path.join(script_dir, "output")
     os.makedirs(input_folder, exist_ok=True)
@@ -15,6 +33,19 @@ def setup_directories(script_dir):
     return input_folder, output_folder
 
 def read_url_from_file(script_dir):
+    """
+    Reads the download URL from the configuration file 'sam_url.txt' in the cfg directory.
+
+    Args:
+        script_dir (str): The absolute path to the directory containing the script or executable.
+
+    Returns:
+        str or None: The URL string if successfully read, otherwise None.
+
+    Notes:
+        - Expects the file 'cfg/sam_url.txt' to exist and contain the URL on the first line.
+        - Logs an info message and returns None if the file cannot be read.
+    """
     cfg_dir = os.path.join(script_dir, "cfg")
     url_file = os.path.join(cfg_dir, "sam_url.txt")
     try:
@@ -26,6 +57,21 @@ def read_url_from_file(script_dir):
         return None
 
 def download_csv_file(url, csv_filename):
+    """
+    Downloads a CSV file from the specified URL and saves it to the given filename.
+
+    Args:
+        url (str): The URL to download the CSV file from.
+        csv_filename (str): The local file path where the downloaded CSV will be saved.
+
+    Returns:
+        None
+
+    Notes:
+        - Logs progress and errors using the logging module.
+        - Uses streaming download to handle large files efficiently.
+        - Overwrites the file if it already exists.
+    """
     try:
         logging.info(f"Downloading CSV from {url} ...")
         with requests.get(url, stream=True, timeout=60) as response:
