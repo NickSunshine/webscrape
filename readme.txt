@@ -1,5 +1,5 @@
-SAM.gov Webscrape 1.1
-23 October 2025
+SAM.gov Webscrape 1.2
+26 February 2026
 =====================
 Maintainer: Nick Sunshine <nsunshine@vtti.vt.edu>
 PM Contact: Ammie Jo Carter <acarter@vtti.vt.edu>
