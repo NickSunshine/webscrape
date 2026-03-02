@@ -12,7 +12,9 @@ if errorlevel 1 (
     pip install pyinstaller
 )
 
-python -m PyInstaller --onefile webscrape.py
+pip install tzlocal
+
+python -m PyInstaller --onefile --hidden-import=tzlocal webscrape.py
 xcopy cfg dist\cfg /E /I /Y
 copy readme.txt dist\readme.txt /Y
 
