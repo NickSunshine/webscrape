@@ -1,5 +1,5 @@
-SAM.gov Webscrape 1.2
-26 February 2026
+SAM.gov Webscrape 1.3
+29 April 2026
 =====================
 Maintainer: Nick Sunshine <nsunshine@vtti.vt.edu>
 PM Contact: Ammie Jo Carter <acarter@vtti.vt.edu>
@@ -61,3 +61,5 @@ Two sheets are present in the Excel file: "Keyword Matches" and "Keyword Match C
 
 "Keyword Match Counts" shows a summary of the matching activity. The first column shows the keyword (initialism, word, or phrase) and the second column shows the number of matches that occured. This can be useful for verification, or to eliminate certain keywords that may be matching too often.
 * For example, "compliance" is a commonly matching word and may not be useful on its own for filtering.
+
+"New Opportunities" is just a convenience sheet for the highlighted rows in "Keyword Matches".  This is created to make it easy to copy and paste into the daily Teams update.

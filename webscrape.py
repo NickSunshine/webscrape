@@ -341,8 +341,54 @@ def highlight_new_rows(filtered_data, output_filename, timestamp, output_dir):
                 excel_row = idx + 2
                 for cell in ws[excel_row]:
                     cell.fill = yellow_fill
+
+
+
+            # Prepare DataFrame for 'New Opportunities' (drop specified columns)
+            drop_cols = [col for col in ["Matched Keywords Count", "Description", "NoticeId"] if col in filtered_data.columns]
+            new_opps_df = filtered_data.drop(columns=drop_cols)
+            # Only keep new rows
+            new_opps_df = new_opps_df.iloc[new_row_indices]
+
+            # Create 'New Opportunities' sheet with only new rows and dropped columns
+            if 'New Opportunities' in wb.sheetnames:
+                del wb['New Opportunities']
+            new_ws = wb.create_sheet('New Opportunities')
+
+            # Write header
+            for col_idx, col_name in enumerate(new_opps_df.columns, 1):
+                new_ws.cell(row=1, column=col_idx, value=col_name)
+
+            # Write new rows
+            for row_num, row in enumerate(new_opps_df.itertuples(index=False), 2):
+                for col_idx, value in enumerate(row, 1):
+                    new_ws.cell(row=row_num, column=col_idx, value=value)
+
+            # Make 'Link' column a clickable hyperlink if present
+            link_col_idx = None
+            for col_idx, col_name in enumerate(new_opps_df.columns, 1):
+                if col_name == "Link":
+                    link_col_idx = col_idx
+                    break
+            if link_col_idx:
+                for row in new_ws.iter_rows(min_row=2, min_col=link_col_idx, max_col=link_col_idx):
+                    cell = row[0]
+                    if cell.value and isinstance(cell.value, str) and cell.value.startswith("http"):
+                        cell.hyperlink = cell.value
+                        cell.style = "Hyperlink"
+
+            # Auto-size all columns to fit content
+            for col_idx, col_name in enumerate(new_opps_df.columns, 1):
+                max_length = len(str(col_name))
+                for row in new_ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx):
+                    cell_value = row[0].value
+                    if cell_value is not None:
+                        max_length = max(max_length, len(str(cell_value)))
+                new_ws.column_dimensions[new_ws.cell(row=1, column=col_idx).column_letter].width = max_length + 2
+
             wb.save(output_filename)
             logging.info(f"Highlighted {len(new_row_indices)} new rows in yellow based on PostedDate newer than previous file timestamp: {prev_timestamp_str}")
+            logging.info(f"Created 'New Opportunities' sheet with {len(new_row_indices)} rows.")
             if parse_failures > 0:
                 logging.info(f"Could not parse PostedDate for {parse_failures} rows. Examples: {failed_examples}")
         else:
