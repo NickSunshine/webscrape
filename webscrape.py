@@ -302,8 +302,6 @@ def highlight_new_rows(filtered_data, output_filename, timestamp, output_dir):
     from openpyxl.styles import PatternFill
     import re as _re
     from dateutil.parser import parse as dtparse
-    import tzlocal
-    local_tz = tzlocal.get_localzone()
     output_files = [f for f in os.listdir(output_dir) if f.endswith('_SAMOpportunities.xlsx')]
     output_files = sorted(output_files)
     if len(output_files) >= 2:
@@ -312,7 +310,7 @@ def highlight_new_rows(filtered_data, output_filename, timestamp, output_dir):
         if match:
             prev_timestamp_str = match.group(1)
             prev_timestamp_naive = datetime.strptime(prev_timestamp_str, "%Y-%m-%d_%H-%M-%S")
-            prev_timestamp = prev_timestamp_naive.replace(tzinfo=local_tz)
+            prev_date = prev_timestamp_naive.date()
             new_row_indices = []
             parse_failures = 0
             failed_examples = []
@@ -328,11 +326,7 @@ def highlight_new_rows(filtered_data, output_filename, timestamp, output_dir):
                         if len(failed_examples) < 5:
                             failed_examples.append(date_str)
                         continue
-                if row_dt.tzinfo is not None:
-                    row_dt_local = row_dt.astimezone(local_tz)
-                else:
-                    row_dt_local = row_dt.replace(tzinfo=local_tz)
-                if row_dt_local > prev_timestamp:
+                if row_dt.date() >= prev_date:
                     new_row_indices.append(idx)
             wb = load_workbook(output_filename)
             ws = wb['Keyword Matches']
@@ -387,7 +381,7 @@ def highlight_new_rows(filtered_data, output_filename, timestamp, output_dir):
                 new_ws.column_dimensions[new_ws.cell(row=1, column=col_idx).column_letter].width = max_length + 2
 
             wb.save(output_filename)
-            logging.info(f"Highlighted {len(new_row_indices)} new rows in yellow based on PostedDate newer than previous file timestamp: {prev_timestamp_str}")
+            logging.info(f"Highlighted {len(new_row_indices)} new rows in yellow based on PostedDate on or after previous file date: {prev_date}.")
             logging.info(f"Created 'New Opportunities' sheet with {len(new_row_indices)} rows.")
             if parse_failures > 0:
                 logging.info(f"Could not parse PostedDate for {parse_failures} rows. Examples: {failed_examples}")
